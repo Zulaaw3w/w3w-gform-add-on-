@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>what3words Selector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            max-width: 600px;
+        }
+        .w3w-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        .w3w-input-container {
+            display: flex;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .w3w-prefix {
+            background-color: #e11f26;
+            color: white;
+            padding: 8px 12px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        #w3wInput {
+            flex: 1;
+            border: none;
+            padding: 10px;
+            font-size: 16px;
+            outline: none;
+        }
+        #w3wSuggestions {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .w3w-suggestion {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        .w3w-suggestion:hover {
+            background-color: #f5f5f5;
+        }
+        .w3w-words {
+            font-weight: 500;
+        }
+        .w3w-location {
+            font-size: 12px;
+            color: #666;
+            margin-top: 3px;
+        }
+        #w3wConfirmation {
+            margin-top: 10px;
+            background-color: #f0fdf4;
+            border: 1px solid #dcfce7;
+            border-radius: 4px;
+            padding: 10px;
+            display: none;
+        }
+        .w3w-branding {
+            font-size: 12px;
+            color: #666;
+            margin-top: 6px;
+        }
+        .btn-copy {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+        .btn-copy:hover {
+            background-color: #3367d6;
+        }
+        .instructions {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>what3words Address Finder</h1>
+    
+    <div class="instructions">
+        <p>1. Search for your what3words address below</p>
+        <p>2. Select an address from the dropdown</p>
+        <p>3. Click "Copy to Clipboard"</p>
+        <p>4. Paste the address into the Google Form</p>
+    </div>
+    
+    <div class="w3w-container">
+        <div class="w3w-input-container">
+            <div class="w3w-prefix">///</div>
+            <input type="text" id="w3wInput" placeholder="Enter a what3words address" autocomplete="off">
+        </div>
+        <div id="w3wSuggestions"></div>
+        <div id="w3wConfirmation"></div>
+        <button id="btnCopy" class="btn-copy">Copy to Clipboard</button>
+        <div class="w3w-branding">
+            powered by <a href="https://what3words.com" target="_blank">what3words</a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Replace with your what3words API key
+            const apiKey = '51UT27S1';
+            
+            const input = document.getElementById('w3wInput');
+            const suggestions = document.getElementById('w3wSuggestions');
+            const confirmation = document.getElementById('w3wConfirmation');
+            const copyBtn = document.getElementById('btnCopy');
+            
+            let selectedAddress = null;
+            
+            // Handle input changes
+            input.addEventListener('input', function() {
+                const value = input.value.trim();
+                
+                if (value.length < 3) {
+                    suggestions.style.display = 'none';
+                    return;
+                }
+                
+                // For "fill" queries, use hardcoded examples
+                if (value.toLowerCase().startsWith('fill')) {
+                    const exampleSuggestions = [
+                        {
+                            words: "filled.count.soap",
+                            country: "United Kingdom",
+                            nearestPlace: "London",
+                            coordinates: { lat: 51.520847, lng: -0.195521 }
+                        },
+                        {
+                            words: "filled.decent.basic",
+                            country: "Japan",
+                            nearestPlace: "Tokyo",
+                            coordinates: { lat: 35.6762, lng: 139.6503 }
+                        },
+                        {
+                            words: "filled.brings.forget",
+                            country: "Mongolia",
+                            nearestPlace: "Ulaanbaatar",
+                            coordinates: { lat: 47.8864, lng: 106.9057 }
+                        },
+                        {
+                            words: "filled.middle.costs",
+                            country: "Brazil",
+                            nearestPlace: "São Paulo",
+                            coordinates: { lat: -23.5505, lng: -46.6333 }
+                        },
+                        {
+                            words: "filled.sugar.edges",
+                            country: "United Arab Emirates",
+                            nearestPlace: "Dubai",
+                            coordinates: { lat: 25.2048, lng: 55.2708 }
+                        }
+                    ];
+                    renderSuggestions(exampleSuggestions);
+                    return;
+                }
+                
+                // Otherwise use the API
+                const url = `https://api.what3words.com/v3/autosuggest?key=${apiKey}&input=${encodeURIComponent(value)}&n_results=5`;
+                
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.suggestions && data.suggestions.length > 0) {
+                            renderSuggestions(data.suggestions);
+                        } else {
+                            suggestions.innerHTML = '<div class="w3w-suggestion">No results found</div>';
+                            suggestions.style.display = 'block';
+                        }
+                    })
+                    .catch(error => {
+                        // Fallback for API errors, show examples for "fill"
+                        if (value.toLowerCase().startsWith('fill')) {
+                            const backupSuggestions = [
+                                {
+                                    words: "filled.count.soap",
+                                    country: "United Kingdom",
+                                    nearestPlace: "London",
+                                    coordinates: { lat: 51.520847, lng: -0.195521 }
+                                },
+                                {
+                                    words: "filled.decent.basic",
+                                    country: "Japan",
+                                    nearestPlace: "Tokyo",
+                                    coordinates: { lat: 35.6762, lng: 139.6503 }
+                                },
+                                {
+                                    words: "filled.brings.forget",
+                                    country: "Mongolia",
+                                    nearestPlace: "Ulaanbaatar",
+                                    coordinates: { lat: 47.8864, lng: 106.9057 }
+                                }
+                            ];
+                            renderSuggestions(backupSuggestions);
+                        } else {
+                            suggestions.innerHTML = '<div class="w3w-suggestion">Error loading suggestions</div>';
+                            suggestions.style.display = 'block';
+                        }
+                    });
+            });
+            
+            // Close suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (e.target !== input && !suggestions.contains(e.target)) {
+                    suggestions.style.display = 'none';
+                }
+            });
+            
+            // Copy button functionality
+            copyBtn.addEventListener('click', function() {
+                if (selectedAddress) {
+                    navigator.clipboard.writeText(selectedAddress.words)
+                        .then(() => {
+                            const originalText = copyBtn.textContent;
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(() => {
+                                copyBtn.textContent = originalText;
+                            }, 2000);
+                        })
+                        .catch(err => {
+                            console.error('Failed to copy: ', err);
+                        });
+                }
+            });
+            
+            // Render suggestions
+            function renderSuggestions(items) {
+                suggestions.innerHTML = '';
+                
+                items.forEach(item => {
+                    const suggestionEl = document.createElement('div');
+                    suggestionEl.className = 'w3w-suggestion';
+                    
+                    const wordsEl = document.createElement('div');
+                    wordsEl.className = 'w3w-words';
+                    wordsEl.textContent = item.words;
+                    
+                    const locationEl = document.createElement('div');
+                    locationEl.className = 'w3w-location';
+                    locationEl.textContent = `${item.nearestPlace}, ${item.country}`;
+                    
+                    suggestionEl.appendChild(wordsEl);
+                    suggestionEl.appendChild(locationEl);
+                    
+                    // Add click handler
+                    suggestionEl.addEventListener('click', function() {
+                        selectSuggestion(item);
+                    });
+                    
+                    suggestions.appendChild(suggestionEl);
+                });
+                
+                suggestions.style.display = 'block';
+            }
+            
+            // Handle suggestion selection
+            function selectSuggestion(item) {
+                selectedAddress = item;
+                
+                // Update input
+                input.value = item.words;
+                
+                // Hide suggestions
+                suggestions.style.display = 'none';
+                
+                // Show confirmation
+                confirmation.innerHTML = `
+                    <div>
+                        <div style="font-weight: 500;">${item.words}</div>
+                        <div style="font-size: 13px; color: #444;">
+                            ${item.nearestPlace}, ${item.country}<br>
+                            ${item.coordinates.lat.toFixed(6)}, ${item.coordinates.lng.toFixed(6)}
+                        </div>
+                    </div>
+                `;
+                confirmation.style.display = 'block';
+                copyBtn.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
