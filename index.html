@@ -127,6 +127,43 @@
             margin: 15px 0;
             text-align: center;
         }
+        #form-entry {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #form-entry label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        #form-entry input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        #form-entry button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .return-btn {
+            display: inline-block;
+            background-color: #4285f4;
+            color: white;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -148,6 +185,15 @@
         <button id="btnSelect" class="btn-select">Select & Return to Form</button>
         <div id="loading" class="loading">Returning to Google Form</div>
         <div id="redirect-message">Saving your address and returning to the form...</div>
+        
+        <!-- Manual form URL entry if needed -->
+        <div id="form-entry">
+            <p>We couldn't automatically detect your Google Form. Please enter the URL below:</p>
+            <label for="form-url">Google Form URL:</label>
+            <input type="text" id="form-url" placeholder="https://docs.google.com/forms/d/...">
+            <button id="form-submit">Continue</button>
+        </div>
+        
         <div class="w3w-branding">
             powered by <a href="https://what3words.com" target="_blank">what3words</a>
         </div>
@@ -164,19 +210,31 @@
             const selectBtn = document.getElementById('btnSelect');
             const loading = document.getElementById('loading');
             const redirectMessage = document.getElementById('redirect-message');
+            const formEntry = document.getElementById('form-entry');
+            const formUrlInput = document.getElementById('form-url');
+            const formSubmitBtn = document.getElementById('form-submit');
             
             let selectedAddress = null;
             let formUrl = null;
             
             // Parse URL parameters to get original form URL
             function getReturnUrl() {
+                // First try URL parameters
                 const urlParams = new URLSearchParams(window.location.search);
                 const sourceUrl = urlParams.get('source'); // Direct URL to the form
                 const formId = urlParams.get('formId'); // Or form ID if source not available
+                const returnUrl = urlParams.get('returnUrl'); // Explicit return URL
+                
+                // Check if we have a valid URL from parameters
+                if (returnUrl && returnUrl.includes('docs.google.com/forms')) {
+                    return decodeURIComponent(returnUrl);
+                }
                 
                 if (sourceUrl && sourceUrl.includes('docs.google.com/forms')) {
-                    return sourceUrl;
-                } else if (formId) {
+                    return decodeURIComponent(sourceUrl);
+                }
+                
+                if (formId) {
                     return `https://docs.google.com/forms/d/${formId}/viewform`;
                 }
                 
@@ -185,13 +243,36 @@
                     return document.referrer;
                 }
                 
-                // Default fallback - will likely not work automatically
+                // Check if we have a form URL saved in localStorage
+                const savedFormUrl = localStorage.getItem('w3wGoogleFormUrl');
+                if (savedFormUrl && savedFormUrl.includes('docs.google.com/forms')) {
+                    return savedFormUrl;
+                }
+                
+                // No valid URL found
                 return null;
             }
             
             // Get the return URL on page load
             formUrl = getReturnUrl();
             console.log('Return URL:', formUrl);
+            
+            // Handle manual form URL submission
+            formSubmitBtn.addEventListener('click', function() {
+                const enteredUrl = formUrlInput.value.trim();
+                if (enteredUrl && enteredUrl.includes('docs.google.com/forms')) {
+                    formUrl = enteredUrl;
+                    localStorage.setItem('w3wGoogleFormUrl', formUrl);
+                    formEntry.style.display = 'none';
+                    
+                    // If we already have a selected address, show the select button again
+                    if (selectedAddress) {
+                        selectBtn.style.display = 'block';
+                    }
+                } else {
+                    alert('Please enter a valid Google Form URL');
+                }
+            });
             
             // Handle input changes
             input.addEventListener('input', function() {
@@ -295,17 +376,18 @@
             selectBtn.addEventListener('click', function() {
                 if (selectedAddress) {
                     // Save address and return to form
-                    saveAddressAndReturnToForm(selectedAddress.words);
+                    if (formUrl) {
+                        saveAddressAndReturnToForm(selectedAddress.words);
+                    } else {
+                        // Show form entry if we don't have a form URL
+                        formEntry.style.display = 'block';
+                        selectBtn.style.display = 'none';
+                    }
                 }
             });
             
             // Function to save address to localStorage and redirect back to the form
             function saveAddressAndReturnToForm(address) {
-                if (!formUrl) {
-                    alert("We couldn't determine which Google Form to return to. Please go back manually and enter this address: " + address);
-                    return;
-                }
-                
                 // Show loading state
                 selectBtn.style.display = 'none';
                 loading.style.display = 'block';
@@ -393,13 +475,75 @@
                     </div>
                 `;
                 confirmation.style.display = 'block';
-                selectBtn.style.display = 'block';
-                selectBtn.textContent = 'Select & Return to Form';
+                
+                // Only show select button if we have a form URL or show the form entry
+                if (formUrl) {
+                    selectBtn.style.display = 'block';
+                    selectBtn.textContent = 'Select & Return to Form';
+                } else {
+                    formEntry.style.display = 'block';
+                }
                 
                 // If auto-select is needed:
                 // if (formUrl) {
                 //     saveAddressAndReturnToForm(item.words);
                 // }
+            }
+            
+            // Check for manual form link
+            if (!formUrl) {
+                // Create a manual return link option
+                const manualReturnDiv = document.createElement('div');
+                manualReturnDiv.style.marginTop = '20px';
+                manualReturnDiv.style.padding = '15px';
+                manualReturnDiv.style.backgroundColor = '#f8f9fa';
+                manualReturnDiv.style.border = '1px solid #ddd';
+                manualReturnDiv.style.borderRadius = '4px';
+                manualReturnDiv.innerHTML = `
+                    <p style="margin-top: 0;">No Google Form detected. You have two options:</p>
+                    <ol>
+                        <li>Enter your Google Form URL above when prompted.</li>
+                        <li>Or, after selecting an address, manually copy it and paste it into your form.</li>
+                    </ol>
+                    <p style="font-weight: bold; margin-bottom: 5px;">Copy your selected address:</p>
+                    <input type="text" id="manual-copy" readonly style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px;" ${selectedAddress ? `value="${selectedAddress.words}"` : ''}>
+                    <button id="copy-btn" style="background-color: #4285f4; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Copy to Clipboard</button>
+                `;
+                
+                document.querySelector('.w3w-container').appendChild(manualReturnDiv);
+                
+                // Add copy functionality
+                document.getElementById('copy-btn').addEventListener('click', function() {
+                    const copyInput = document.getElementById('manual-copy');
+                    copyInput.select();
+                    document.execCommand('copy');
+                    this.textContent = 'Copied!';
+                    setTimeout(() => {
+                        this.textContent = 'Copy to Clipboard';
+                    }, 2000);
+                });
+                
+                // Update the copy input when an address is selected
+                const manualCopyInput = document.getElementById('manual-copy');
+                if (manualCopyInput) {
+                    const updateManualCopy = function() {
+                        if (selectedAddress) {
+                            manualCopyInput.value = selectedAddress.words;
+                        }
+                    };
+                    
+                    // Create a MutationObserver to watch for changes to selectedAddress
+                    const observer = new MutationObserver(function(mutations) {
+                        mutations.forEach(function(mutation) {
+                            if (mutation.type === 'attributes' && mutation.attributeName === 'data-selected-address') {
+                                updateManualCopy();
+                            }
+                        });
+                    });
+                    
+                    // Watch for changes to the data-selected-address attribute
+                    observer.observe(document.body, { attributes: true, attributeFilter: ['data-selected-address'] });
+                }
             }
         });
     </script>
