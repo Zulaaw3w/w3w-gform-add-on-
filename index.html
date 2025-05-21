@@ -114,24 +114,25 @@
             border-radius: 4px;
             color: #155724;
         }
-        #returnInfo {
+        #loading {
             display: none;
             margin-top: 15px;
-            padding: 10px;
-            background-color: #cce5ff;
-            border: 1px solid #b8daff;
-            border-radius: 4px;
-            color: #004085;
+            text-align: center;
         }
-        #returnLink {
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4285f4;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
             display: inline-block;
-            background-color: #4CAF50;
-            color: white;
-            text-decoration: none;
-            padding: 10px 16px;
-            border-radius: 4px;
-            margin-top: 10px;
-            font-weight: bold;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -141,7 +142,7 @@
     <div class="instructions">
         <p>1. Search for your what3words address below</p>
         <p>2. Select an address from the dropdown</p>
-        <p>3. Click "Select & Return to Form" to automatically add the address to your Google Form</p>
+        <p>3. Click "Add to Form" to automatically add the address to your Google Form</p>
     </div>
     
     <div class="w3w-container">
@@ -151,9 +152,11 @@
         </div>
         <div id="w3wSuggestions"></div>
         <div id="w3wConfirmation"></div>
-        <button id="btnAutofill" class="btn btn-autofill">Select & Return to Form</button>
+        <button id="btnAddToForm" class="btn btn-autofill">Add to Form</button>
+        <div id="loading">
+            <span class="loading-spinner"></span> Saving address and returning to your form...
+        </div>
         <div id="successMessage"></div>
-        <div id="returnInfo"></div>
         <div class="w3w-branding">
             powered by <a href="https://what3words.com" target="_blank">what3words</a>
         </div>
@@ -164,25 +167,17 @@
             // Replace with your what3words API key
             const apiKey = '51UT27S1';
             
+            // HARDCODED FORM URL - This is your specific Google Form
+            const YOUR_GOOGLE_FORM = 'https://docs.google.com/forms/d/e/1FAIpQLSdR4LTPkfZkMBpn075keCSqX0KOaBFyIRSKbTscuU5eh37HFQ/viewform';
+            
             const input = document.getElementById('w3wInput');
             const suggestions = document.getElementById('w3wSuggestions');
             const confirmation = document.getElementById('w3wConfirmation');
-            const autofillBtn = document.getElementById('btnAutofill');
+            const addToFormBtn = document.getElementById('btnAddToForm');
             const successMessage = document.getElementById('successMessage');
-            const returnInfo = document.getElementById('returnInfo');
+            const loading = document.getElementById('loading');
             
             let selectedAddress = null;
-            let returnUrl = null;
-            
-            // Get the return URL from the query parameter
-            function getReturnUrl() {
-                const urlParams = new URLSearchParams(window.location.search);
-                return urlParams.get('returnUrl');
-            }
-            
-            // Initialize on page load
-            returnUrl = getReturnUrl();
-            console.log('Return URL:', returnUrl);
             
             // Handle input changes
             input.addEventListener('input', function() {
@@ -282,55 +277,25 @@
                 }
             });
             
-            // Autofill button functionality
-            autofillBtn.addEventListener('click', function() {
+            // Add to Form button functionality
+            addToFormBtn.addEventListener('click', function() {
                 if (selectedAddress) {
-                    if (returnUrl) {
-                        // Save the address to various storage mechanisms
-                        localStorage.setItem('w3wSelectedAddress', selectedAddress.words);
-                        sessionStorage.setItem('w3wSelectedAddress', selectedAddress.words);
-                        
-                        // Set a cookie that expires in 1 hour
-                        const expiryDate = new Date();
-                        expiryDate.setTime(expiryDate.getTime() + (60 * 60 * 1000)); // 1 hour
-                        document.cookie = `w3wSelectedAddress=${selectedAddress.words};expires=${expiryDate.toUTCString()};path=/`;
-                        
-                        // Create a return URL with the address as a parameter
-                        const targetUrl = new URL(returnUrl);
-                        targetUrl.searchParams.append('w3wAddress', selectedAddress.words);
-                        targetUrl.searchParams.append('w3wTime', new Date().getTime());
-                        
-                        // Show a success message
-                        successMessage.textContent = "Address selected! Returning to your form...";
-                        successMessage.style.display = "block";
-                        
-                        // Redirect back to the form after a short delay
-                        setTimeout(function() {
-                            window.location.href = targetUrl.toString();
-                        }, 1500);
-                    } else {
-                        // No return URL available, show manual instructions
-                        returnInfo.innerHTML = `
-                            <strong>Address selected: ${selectedAddress.words}</strong>
-                            <p>We couldn't determine your Google Form URL. Please manually copy this address and paste it into your form field.</p>
-                            <div style="display: flex; margin-top: 10px;">
-                                <input id="copyField" type="text" value="${selectedAddress.words}" readonly style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px 0 0 4px;">
-                                <button id="copyBtn" class="btn" style="border-radius: 0 4px 4px 0; margin-top: 0;">Copy</button>
-                            </div>
-                        `;
-                        returnInfo.style.display = "block";
-                        
-                        // Add copy functionality
-                        document.getElementById('copyBtn').addEventListener('click', function() {
-                            const copyField = document.getElementById('copyField');
-                            copyField.select();
-                            document.execCommand('copy');
-                            this.textContent = "Copied!";
-                            setTimeout(() => {
-                                this.textContent = "Copy";
-                            }, 2000);
-                        });
-                    }
+                    // Save the selected address in all available storage mechanisms
+                    localStorage.setItem('w3wSelectedAddress', selectedAddress.words);
+                    sessionStorage.setItem('w3wSelectedAddress', selectedAddress.words);
+                    document.cookie = `w3wSelectedAddress=${selectedAddress.words}; path=/; max-age=3600`;
+                    
+                    // Show loading state
+                    addToFormBtn.style.display = 'none';
+                    loading.style.display = 'block';
+                    
+                    // Redirect to the Google Form with the address as a parameter
+                    const redirectUrl = `${YOUR_GOOGLE_FORM}?w3wAddress=${encodeURIComponent(selectedAddress.words)}&timestamp=${Date.now()}`;
+                    
+                    // Redirect after a short delay
+                    setTimeout(function() {
+                        window.location.href = redirectUrl;
+                    }, 1500);
                 }
             });
             
@@ -385,14 +350,8 @@
                     </div>
                 `;
                 confirmation.style.display = 'block';
-                autofillBtn.style.display = 'block';
-                
-                // Update button text based on whether we have a return URL
-                if (returnUrl) {
-                    autofillBtn.textContent = 'Select & Return to Form';
-                } else {
-                    autofillBtn.textContent = 'Select This Address';
-                }
+                addToFormBtn.style.display = 'block';
+                addToFormBtn.textContent = 'Add to Form';
             }
         });
     </script>
@@ -444,14 +403,18 @@
                 // Find the what3words input field in the form
                 function findW3wField() {
                     // First, look for labels with "what3words" or "w3w" in them
-                    const allQuestionTitles = document.querySelectorAll('.freebirdFormviewerComponentsQuestionBaseTitle');
+                    const allQuestionTitles = document.querySelectorAll('.freebirdFormviewerComponentsQuestionBaseTitle, .freebirdFormviewerViewItemsItemItemTitle, label');
                     for (const title of allQuestionTitles) {
                         if (title.textContent.toLowerCase().includes('what3words') || 
                             title.textContent.toLowerCase().includes('w3w') ||
                             title.textContent.toLowerCase().includes('address')) {
                             
                             // Find the associated input field
-                            const container = title.closest('.freebirdFormviewerViewItemsItemItem');
+                            let container = title.closest('.freebirdFormviewerComponentsQuestionTextRoot, .freebirdFormviewerViewItemsItemItem');
+                            if (!container) {
+                                container = title.parentElement;
+                            }
+                            
                             if (container) {
                                 const input = container.querySelector('input[type="text"]');
                                 if (input) return input;
@@ -459,20 +422,8 @@
                         }
                     }
                     
-                    // If not found by label, try to find by validation pattern
+                    // If not found by label, try to find by any empty text input
                     const allInputs = document.querySelectorAll('input[type="text"]');
-                    for (const input of allInputs) {
-                        // If the input is empty, it's a candidate
-                        if (!input.value) {
-                            // Check if the container has a validation pattern that looks like word.word.word
-                            const container = input.closest('.freebirdFormviewerViewItemsItemItem');
-                            if (container && container.textContent.includes('.')) {
-                                return input;
-                            }
-                        }
-                    }
-                    
-                    // If still not found, just return any empty text input
                     for (const input of allInputs) {
                         if (!input.value) return input;
                     }
@@ -483,30 +434,53 @@
                 // Fill the form field
                 function fillFormField() {
                     const address = getW3wAddress();
-                    if (!address) return;
+                    if (!address) {
+                        console.log('No what3words address found to autofill');
+                        return;
+                    }
                     
-                    const field = findW3wField();
-                    if (!field) return;
+                    console.log('Found address to autofill:', address);
                     
-                    console.log('Filling form field with address:', address);
+                    // Try multiple times with delays to find the field (in case form is still loading)
+                    let attempts = 0;
+                    const maxAttempts = 10;
                     
-                    // Set the field value
-                    field.value = address;
+                    function attemptFill() {
+                        attempts++;
+                        const field = findW3wField();
+                        
+                        if (field) {
+                            console.log('Found form field, filling with address:', address);
+                            
+                            // Set the field value
+                            field.value = address;
+                            
+                            // Dispatch events to ensure the form recognizes the change
+                            field.dispatchEvent(new Event('input', { bubbles: true }));
+                            field.dispatchEvent(new Event('change', { bubbles: true }));
+                            field.dispatchEvent(new Event('blur', { bubbles: true }));
+                            
+                            // Optional: Highlight the field briefly to show it was filled
+                            const originalBackground = field.style.backgroundColor;
+                            field.style.backgroundColor = '#d4edda';
+                            setTimeout(() => {
+                                field.style.backgroundColor = originalBackground;
+                            }, 2000);
+                            
+                            console.log('Successfully autofilled the form field');
+                        } else if (attempts < maxAttempts) {
+                            console.log(`Attempt ${attempts}/${maxAttempts}: Form field not found yet, trying again...`);
+                            setTimeout(attemptFill, 500);
+                        } else {
+                            console.log('Failed to find form field after maximum attempts');
+                        }
+                    }
                     
-                    // Dispatch events to ensure the form recognizes the change
-                    field.dispatchEvent(new Event('input', { bubbles: true }));
-                    field.dispatchEvent(new Event('change', { bubbles: true }));
-                    field.dispatchEvent(new Event('blur', { bubbles: true }));
-                    
-                    // Optional: Highlight the field briefly to show it was filled
-                    const originalBackground = field.style.backgroundColor;
-                    field.style.backgroundColor = '#d4edda';
-                    setTimeout(() => {
-                        field.style.backgroundColor = originalBackground;
-                    }, 2000);
+                    // Start the first attempt
+                    attemptFill();
                 }
                 
-                // Wait for the form to fully load, then fill the field
+                // Wait for the form to load, then try to fill
                 setTimeout(fillFormField, 1000);
             }
         })();
