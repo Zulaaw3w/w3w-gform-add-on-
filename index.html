@@ -147,6 +147,10 @@
             // Your Google Form URL
             const googleFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSdR4LTPkfZkMBpn075keCSqX0KOaBFyIRSKbTscuU5eh37HFQ/viewform';
             
+            // IMPORTANT: This is the specific field entry ID for your what3words address field in your Google Form
+            // This is the key to making the autofill work reliably
+            const formEntryId = 'entry.1000027'; // The actual entry ID you provided
+            
             const input = document.getElementById('w3wInput');
             const suggestions = document.getElementById('w3wSuggestions');
             const confirmation = document.getElementById('w3wConfirmation');
@@ -299,164 +303,24 @@
                 loading.style.display = 'block';
                 
                 // Save the address to localStorage, sessionStorage, and cookies
+                // This provides multiple ways to retrieve it later
                 localStorage.setItem('w3wSelectedAddress', item.words);
                 sessionStorage.setItem('w3wSelectedAddress', item.words);
                 document.cookie = `w3wSelectedAddress=${item.words}; path=/; max-age=3600`;
                 
-                // Redirect to Google Form with address as parameter
+                // Create a timestamp to ensure the URL is always unique (prevents caching issues)
+                const timestamp = Date.now();
+                
+                // Create URL with the exact entry ID parameter to directly fill the form field
+                // This is the key - using the correct entry ID makes Google Forms automatically fill that field
+                const redirectUrl = `${googleFormUrl}?${formEntryId}=${encodeURIComponent(item.words)}&w3wAddress=${encodeURIComponent(item.words)}&ts=${timestamp}`;
+                
+                // Redirect to the form after a short delay
                 setTimeout(function() {
-                    // Make sure the address is copied to clipboard as a fallback
-                    try {
-                        navigator.clipboard.writeText(item.words);
-                    } catch (e) {
-                        console.error('Could not copy to clipboard:', e);
-                    }
-                    
-                    // Redirect to the Google Form with the address as a parameter
-                    window.location.href = `${googleFormUrl}?w3wAddress=${encodeURIComponent(item.words)}&ts=${Date.now()}`;
+                    window.location.href = redirectUrl;
                 }, 1500);
             }
         });
-    </script>
-    
-    <!-- Auto-injection script - this will be injected into the Google Form -->
-    <script>
-        // Only run this if we're on a Google Forms page
-        if (window.location.href.includes('docs.google.com/forms')) {
-            console.log('Google Form detected - setting up autofill');
-            
-            // Function to automatically fill the what3words field
-            function autofillW3wAddress() {
-                console.log('Attempting to autofill the what3words field');
-                
-                // Get the address from URL parameters or storage
-                function getAddress() {
-                    // First check URL parameters
-                    const urlParams = new URLSearchParams(window.location.search);
-                    if (urlParams.has('w3wAddress')) {
-                        return urlParams.get('w3wAddress');
-                    }
-                    
-                    // Then check localStorage
-                    if (localStorage.getItem('w3wSelectedAddress')) {
-                        return localStorage.getItem('w3wSelectedAddress');
-                    }
-                    
-                    // Then check sessionStorage
-                    if (sessionStorage.getItem('w3wSelectedAddress')) {
-                        return sessionStorage.getItem('w3wSelectedAddress');
-                    }
-                    
-                    // Finally check cookies
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.startsWith('w3wSelectedAddress=')) {
-                            return cookie.substring('w3wSelectedAddress='.length);
-                        }
-                    }
-                    
-                    return null;
-                }
-                
-                const address = getAddress();
-                if (!address) {
-                    console.log('No what3words address found to autofill');
-                    return;
-                }
-                
-                console.log('Found address to autofill:', address);
-                
-                // Try to find the what3words field
-                function findW3wField() {
-                    // Look for any elements with text containing "what3words" or "w3w"
-                    const elements = document.querySelectorAll('*');
-                    for (let i = 0; i < elements.length; i++) {
-                        const el = elements[i];
-                        const text = el.textContent || '';
-                        
-                        if (text.toLowerCase().includes('what3words') || 
-                            text.toLowerCase().includes('w3w') ||
-                            text.toLowerCase().includes('address')) {
-                            
-                            // Found a potential container, look for an input field nearby
-                            let container = el.closest('.freebirdFormviewerViewItemsItemItem') || 
-                                           el.closest('.freebirdFormviewerComponentsQuestionBaseRoot') ||
-                                           el.parentElement;
-                            
-                            if (container) {
-                                const input = container.querySelector('input[type="text"]');
-                                if (input) return input;
-                            }
-                        }
-                    }
-                    
-                    // If we can't find a specific what3words field, look for any empty text input
-                    const inputs = document.querySelectorAll('input[type="text"]');
-                    for (let i = 0; i < inputs.length; i++) {
-                        if (!inputs[i].value) {
-                            return inputs[i];
-                        }
-                    }
-                    
-                    return null;
-                }
-                
-                // Make multiple attempts to find and fill the field
-                let attempts = 0;
-                const maxAttempts = 20;
-                
-                function attemptFill() {
-                    attempts++;
-                    
-                    const field = findW3wField();
-                    if (field) {
-                        console.log('Found form field, filling with:', address);
-                        
-                        // Set the value
-                        field.value = address;
-                        
-                        // Trigger necessary events
-                        field.dispatchEvent(new Event('input', { bubbles: true }));
-                        field.dispatchEvent(new Event('change', { bubbles: true }));
-                        
-                        // Briefly highlight the field to show it was filled
-                        const originalBackground = field.style.backgroundColor;
-                        field.style.backgroundColor = '#d4edda';
-                        setTimeout(() => {
-                            field.style.backgroundColor = originalBackground;
-                        }, 2000);
-                        
-                        console.log('Successfully filled the form field');
-                    } else if (attempts < maxAttempts) {
-                        console.log(`Attempt ${attempts}/${maxAttempts}: Field not found yet, trying again...`);
-                        setTimeout(attemptFill, 500);
-                    } else {
-                        console.log('Failed to find and fill the form field after maximum attempts');
-                        
-                        // Alert the user that they need to paste manually
-                        alert(`Please paste this what3words address into the form: ${address} (It has been copied to your clipboard)`);
-                        
-                        // Try to copy to clipboard again as a last resort
-                        try {
-                            navigator.clipboard.writeText(address);
-                        } catch (e) {
-                            console.error('Could not copy to clipboard:', e);
-                        }
-                    }
-                }
-                
-                // Start attempting to fill the field
-                setTimeout(attemptFill, 1000);
-            }
-            
-            // Run the autofill function once the page is fully loaded
-            if (document.readyState === 'complete') {
-                autofillW3wAddress();
-            } else {
-                window.addEventListener('load', autofillW3wAddress);
-            }
-        }
     </script>
 </body>
 </html>
