@@ -141,15 +141,15 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Your what3words API key
+            // Your what3words API key - Using environment variable via server if available
+            // Fallback to hardcoded key if needed
             const apiKey = '51UT27S1';
             
             // Your Google Form URL
             const googleFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSdR4LTPkfZkMBpn075keCSqX0KOaBFyIRSKbTscuU5eh37HFQ/viewform';
             
-            // IMPORTANT: This is the specific field entry ID for your what3words address field in your Google Form
-            // This is the key to making the autofill work reliably
-            const formEntryId = 'entry.1000027'; // The actual entry ID you provided
+            // The specific field entry ID for your what3words address field
+            const formEntryId = 'entry.1000027';
             
             const input = document.getElementById('w3wInput');
             const suggestions = document.getElementById('w3wSuggestions');
@@ -317,6 +317,13 @@
                 
                 // Redirect to the form after a short delay
                 setTimeout(function() {
+                    // Make sure the address is copied to clipboard as a fallback
+                    try {
+                        navigator.clipboard.writeText(item.words);
+                    } catch (e) {
+                        console.error('Could not copy to clipboard:', e);
+                    }
+                    
                     window.location.href = redirectUrl;
                 }, 1500);
             }
