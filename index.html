@@ -141,15 +141,19 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Your what3words API key - Using environment variable via server if available
-            // Fallback to hardcoded key if needed
+            // IMPORTANT CONFIG - CUSTOMIZE THESE VALUES
+            // =============================================
+            
+            // Your what3words API key
             const apiKey = '51UT27S1';
             
             // Your Google Form URL
             const googleFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSdR4LTPkfZkMBpn075keCSqX0KOaBFyIRSKbTscuU5eh37HFQ/viewform';
             
-            // The specific field entry ID for your what3words address field
-            const formEntryId = 'entry.1000027';
+            // CRITICAL: This is the specific field entry ID for your what3words address field
+            // This ensures the selected address is inserted directly into this specific field
+            const addressFieldEntryId = 'entry.1000027';
+            // =============================================
             
             const input = document.getElementById('w3wInput');
             const suggestions = document.getElementById('w3wSuggestions');
@@ -157,16 +161,6 @@
             const loading = document.getElementById('loading');
             
             let selectedAddress = null;
-            
-            // Check URL parameters for pre-filled address
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('prefill')) {
-                input.value = urlParams.get('prefill');
-                // Trigger search if prefill is provided
-                if (input.value.length > 2) {
-                    fetchSuggestions(input.value);
-                }
-            }
             
             // Handle input changes
             input.addEventListener('input', function() {
@@ -266,7 +260,7 @@
                     suggestionEl.appendChild(wordsEl);
                     suggestionEl.appendChild(locationEl);
                     
-                    // Add click handler
+                    // Add click handler to select this address
                     suggestionEl.addEventListener('click', function() {
                         selectSuggestion(item);
                     });
@@ -313,7 +307,8 @@
                 
                 // Create URL with the exact entry ID parameter to directly fill the form field
                 // This is the key - using the correct entry ID makes Google Forms automatically fill that field
-                const redirectUrl = `${googleFormUrl}?${formEntryId}=${encodeURIComponent(item.words)}&w3wAddress=${encodeURIComponent(item.words)}&ts=${timestamp}`;
+                // IMPORTANT: We specifically target entry.1000027 which is the address field in your form
+                const redirectUrl = `${googleFormUrl}?${addressFieldEntryId}=${encodeURIComponent(item.words)}&ts=${timestamp}`;
                 
                 // Redirect to the form after a short delay
                 setTimeout(function() {
@@ -324,6 +319,7 @@
                         console.error('Could not copy to clipboard:', e);
                     }
                     
+                    // Redirect with the address as a direct parameter to entry.1000027
                     window.location.href = redirectUrl;
                 }, 1500);
             }
