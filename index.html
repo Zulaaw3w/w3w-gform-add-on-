@@ -260,35 +260,63 @@
             
             // Function to autofill Google Form
             function autofillGoogleForm(address) {
-                if (isEmbedded) {
-                    // Send message to parent window (Google Form)
-                    window.parent.postMessage({
-                        type: 'W3W_ADDRESS_SELECTED',
-                        address: address
-                    }, '*');
-                    
-                    successMessage.innerHTML = 'Address sent to your Google Form!';
-                    successMessage.style.display = 'block';
-                    
-                    // Hide after 3 seconds
-                    setTimeout(() => {
-                        successMessage.style.display = 'none';
-                    }, 5000);
-                } else {
-                    // If we're in the popup window, send message to opener window
-                    if (window.opener) {
-                        window.opener.postMessage({
+                // Try to find the Google Form field to autofill
+                try {
+                    // First approach: try postMessage to parent window
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({
                             type: 'W3W_ADDRESS_SELECTED',
                             address: address
                         }, '*');
-                        
-                        successMessage.innerHTML = 'Address sent to your Google Form! You can now close this window and continue with your form.';
-                        successMessage.style.display = 'block';
-                    } else {
-                        // We're on a standalone page - can't autofill
-                        successMessage.innerHTML = 'Please open this page from your Google Form to use the autofill feature.';
-                        successMessage.style.display = 'block';
                     }
+                    
+                    // Second approach: try to write directly to the opener window if we were opened from a form
+                    if (window.opener) {
+                        // Try to find and fill a form field in the opener window
+                        const w3wFieldSelector = 'input[type="text"][aria-label*="what3words"]';
+                        const formFields = window.opener.document.querySelectorAll(w3wFieldSelector);
+                        
+                        if (formFields.length > 0) {
+                            // Fill the first matching field
+                            formFields[0].value = address;
+                            formFields[0].dispatchEvent(new Event('input', { bubbles: true }));
+                            formFields[0].dispatchEvent(new Event('change', { bubbles: true }));
+                            
+                            // Confirm to the user
+                            showSuccessMessage('Form successfully autofilled! You can now close this window.');
+                            return;
+                        }
+                    }
+                    
+                    // Third approach (fallback): provide instructions for manual insertion
+                    showSuccessMessage('Address selected: ' + address + '. Your Google Form will be autofilled, or you can manually enter this address.');
+                
+                    // Store in localStorage so it can be retrieved
+                    localStorage.setItem('selectedW3WAddress', address);
+                    
+                } catch (error) {
+                    console.error('Error while autofilling:', error);
+                    showSuccessMessage('Could not automatically fill form due to browser security. Please copy this address: ' + address);
+                }
+            }
+            
+            function showSuccessMessage(message) {
+                successMessage.textContent = message;
+                successMessage.style.display = 'block';
+                
+                // If we're in a popup, suggest closure
+                if (window.opener) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.textContent = 'Close this window';
+                    closeBtn.className = 'btn-autofill';
+                    closeBtn.style.display = 'block';
+                    closeBtn.style.marginTop = '10px';
+                    closeBtn.addEventListener('click', function() {
+                        window.close();
+                    });
+                    
+                    successMessage.appendChild(document.createElement('br'));
+                    successMessage.appendChild(closeBtn);
                 }
             }
             
@@ -345,64 +373,136 @@
                 confirmation.style.display = 'block';
                 autofillBtn.style.display = 'block';
                 autofillBtn.textContent = 'Autofill Form';
-                
-                // If auto-autofill is needed, uncomment this:
-                // if (isEmbedded) {
-                //    autofillGoogleForm(item.words);
-                // }
             }
             
-            // Listen for messages from the parent window
-            window.addEventListener('message', function(event) {
-                // Check if it's a request to autosubmit the currently selected address
-                if (event.data && event.data.type === 'REQUEST_W3W_ADDRESS' && selectedAddress) {
-                    autofillGoogleForm(selectedAddress.words);
+            // Handle form field setup on load
+            window.addEventListener('load', function() {
+                // Check URL parameters 
+                const urlParams = new URLSearchParams(window.location.search);
+                const formId = urlParams.get('formId');
+                const isEmbedded = urlParams.get('embedded') === 'true';
+                
+                // If we're embedded or have a formId, update UI accordingly
+                if (isEmbedded || formId) {
+                    // Update the button text
+                    autofillBtn.textContent = 'Autofill Google Form';
+                    
+                    // If we have a specific form ID, we can show it
+                    if (formId) {
+                        const formIdDisplay = document.createElement('div');
+                        formIdDisplay.textContent = 'Connected to Google Form';
+                        formIdDisplay.style.fontSize = '12px';
+                        formIdDisplay.style.marginTop = '5px';
+                        formIdDisplay.style.color = '#0d6efd';
+                        document.querySelector('.w3w-branding').prepend(formIdDisplay);
+                    }
+                }
+                
+                // If we were previously opened and have a stored address, show it
+                const storedAddress = localStorage.getItem('selectedW3WAddress');
+                if (storedAddress) {
+                    // Show the stored address
+                    input.value = storedAddress;
+                    
+                    // Simulate selecting that address
+                    const mockItem = {
+                        words: storedAddress,
+                        country: "Previous Selection",
+                        nearestPlace: "Stored Address",
+                        coordinates: { lat: 0, lng: 0 }
+                    };
+                    
+                    selectSuggestion(mockItem);
+                    
+                    // Show a message that we've restored their previous selection
+                    showSuccessMessage('Restored your previous address selection: ' + storedAddress);
                 }
             });
             
-            // Notify parent that we're ready (if in iframe)
+            // If we're in an iframe, listen for messages from the parent
             if (isEmbedded) {
-                window.parent.postMessage({
-                    type: 'W3W_APP_READY'
-                }, '*');
+                window.addEventListener('message', function(event) {
+                    if (event.data && event.data.type === 'W3W_REQUEST_ADDRESS' && selectedAddress) {
+                        autofillGoogleForm(selectedAddress.words);
+                    }
+                });
             }
         });
     </script>
     
-    <!-- Add script to facilitate autofill -->
+    <!-- Additional script for Google Form integration -->
     <script>
-        // This script helps the google form integration
+        // This script adds direct support for Google Forms integration
         (function() {
-            // Function to get URL parameters
-            function getUrlParameter(name) {
-                name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
-                var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
-                var results = regex.exec(location.search);
-                return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-            }
+            // Check if this page is opened from Google Forms
+            const isFromGoogleForms = document.referrer.includes('docs.google.com/forms') || 
+                                     window.location.search.includes('formId=');
             
-            // Check if we're being requested to autofill a google form
-            const formId = getUrlParameter('formId');
-            const isEmbedded = getUrlParameter('embedded') === 'true';
-            
-            // If we have a formId, we're integrated with a google form
-            if (formId) {
-                console.log('Integrated with Google Form ID:', formId);
+            if (isFromGoogleForms) {
+                // Add a message to the top of the page
+                const formNotice = document.createElement('div');
+                formNotice.style.backgroundColor = '#e8f0fe';
+                formNotice.style.padding = '10px';
+                formNotice.style.borderRadius = '4px';
+                formNotice.style.marginBottom = '15px';
+                formNotice.innerHTML = '<strong>Google Form Integration:</strong> When you select an address, it will automatically fill your form field.';
                 
-                // Change the button text to make it clearer
-                const autofillBtn = document.getElementById('btnAutofill');
-                if (autofillBtn) {
-                    autofillBtn.textContent = 'Add to Google Form';
-                }
+                document.body.insertBefore(formNotice, document.body.firstChild);
                 
-                // Update instructions
-                const instructionsDiv = document.querySelector('.instructions');
-                if (instructionsDiv) {
-                    instructionsDiv.innerHTML = `
-                        <p>1. Search for your what3words address below</p>
-                        <p>2. Select an address from the dropdown</p>
-                        <p>3. Click "Add to Google Form" to automatically fill your form field</p>
-                    `;
+                // Add script to inject into parent form
+                // This will be used when user clicks the autofill button
+                const injectScript = `
+                    // Find the what3words input field
+                    function findW3wField() {
+                        // Try to find by label text first
+                        const labels = document.querySelectorAll('label');
+                        for (const label of labels) {
+                            if (label.textContent.toLowerCase().includes('what3words')) {
+                                const input = label.nextElementSibling?.querySelector('input');
+                                if (input) return input;
+                            }
+                        }
+                        
+                        // If not found, try by other means
+                        return document.querySelector('input[aria-label*="what3words"], input[placeholder*="what3words"]');
+                    }
+                    
+                    // Listen for messages from the iframe
+                    window.addEventListener('message', function(event) {
+                        if (event.data && event.data.type === 'W3W_ADDRESS_SELECTED') {
+                            const field = findW3wField();
+                            if (field) {
+                                // Fill the field
+                                field.value = event.data.address;
+                                field.dispatchEvent(new Event('input', {bubbles: true}));
+                                field.dispatchEvent(new Event('change', {bubbles: true}));
+                                console.log('Successfully filled field with', event.data.address);
+                                
+                                // Notify the iframe
+                                event.source.postMessage({
+                                    type: 'W3W_AUTOFILL_SUCCESS'
+                                }, '*');
+                            } else {
+                                console.error('Could not find what3words field in the form');
+                                event.source.postMessage({
+                                    type: 'W3W_AUTOFILL_FAILURE',
+                                    error: 'Could not find what3words field in the form'
+                                }, '*');
+                            }
+                        }
+                    });
+                `;
+                
+                // If we're in a popup window opened by Google Forms
+                if (window.opener && document.referrer.includes('docs.google.com/forms')) {
+                    try {
+                        // Try to inject the script into the opener window
+                        const script = document.createElement('script');
+                        script.textContent = injectScript;
+                        window.opener.document.body.appendChild(script);
+                    } catch (error) {
+                        console.error('Could not inject script into parent window due to security restrictions');
+                    }
                 }
             }
         })();
